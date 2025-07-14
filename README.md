@@ -18,6 +18,17 @@ This repository provides reusable, production-ready **EC2 Image Builder componen
   - Installs latest `.msi` version from New Relic CDN
   - Accepts license key as a parameter
 
+---
+
+### 2. **Grafana Alloy Agent (Windows)**
+
+- **Path:** [`components/grafana-alloy-windows-component`](./components/grafana-alloy-windows-component)
+- **Description:**
+  Installs the latest Grafana Alloy agent on Windows by dynamically fetching the latest release from GitHub. This component installs only the agent. You must take additional steps to configure and use the agent. For more information, see the documentation at https://grafana.com/docs/grafana-cloud/monitor-infrastructure/integrations/integration-reference/integration-windows-exporter/
+
+- **Highlights:**
+  - Dynamically pulls latest GitHub release
+  - Supports silent installation
 
 ---
 

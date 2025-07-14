@@ -30,6 +30,9 @@ resource "aws_imagebuilder_image_recipe" "recipe" {
       value = data.aws_ssm_parameter.new_relic_license.value
     }
   }
+  component {
+    component_arn = aws_imagebuilder_component.grafana_alloy_agent_windows.arn
+  }
 
   lifecycle { create_before_destroy = true }
 }

@@ -1,0 +1,92 @@
+name: Grafana Alloy Agent
+description: Installs the latest Grafana Alloy agent on Windows by dynamically fetching the latest release from GitHub. This component installs only the agent. You must take additional steps to configure and use the agent. For more information, see the documentation at https://grafana.com/docs/grafana-cloud/monitor-infrastructure/integrations/integration-reference/integration-windows-exporter/
+schemaVersion: 1.0
+phases:
+  - name: build
+    steps:
+      - name: FetchLatestReleaseInfo
+        action: ExecutePowerShell
+        inputs:
+          commands:
+            - |
+              $apiUrl = 'https://api.github.com/repos/grafana/alloy/releases/latest'
+              $response = Invoke-RestMethod -Uri $apiUrl
+              $asset = $response.assets | Where-Object { $_.name -match 'alloy-installer-windows-amd64.exe.zip$' }
+              if (-not $asset) {
+                  Write-Error "Could not find Alloy Windows installer in latest release."
+                  exit 1
+              }
+              Write-Host $asset.browser_download_url
+
+      - name: ExtractInstallerUrl
+        action: ExecutePowerShell
+        inputs:
+          commands:
+            - $url = "{{ build.FetchLatestReleaseInfo.outputs.stdout }}".Trim()
+            - Write-Host $url
+
+      - name: DetermineDownloadPath
+        action: ExecutePowerShell
+        inputs:
+          commands:
+            - $url = "{{ build.ExtractInstallerUrl.outputs.stdout }}".Trim()
+            - $fileName = Split-Path -Leaf $url
+            - $downloadPath = Join-Path $env:TEMP $fileName
+            - Write-Host $downloadPath
+
+      - name: DownloadInstaller
+        action: WebDownload
+        maxAttempts: 3
+        inputs:
+          - source: '{{ build.ExtractInstallerUrl.outputs.stdout }}'
+            destination: '{{ build.DetermineDownloadPath.outputs.stdout }}'
+            overwrite: true
+
+      - name: ExtractInstaller
+        action: ExecutePowerShell
+        inputs:
+          commands:
+            - |
+              $zipPath = "{{ build.DetermineDownloadPath.outputs.stdout }}".Trim()
+              $extractPath = Join-Path $env:TEMP "alloy_installer"
+              Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
+              $exe = Get-ChildItem "$extractPath\*.exe" | Select-Object -First 1
+              if (-not $exe) {
+                  Write-Error "Alloy installer executable not found after extraction."
+                  exit 1
+              }
+              Write-Host $exe.FullName
+
+      - name: SilentInstall
+        action: ExecutePowerShell
+        inputs:
+          commands:
+            - |
+              $installer = "{{ build.ExtractInstaller.outputs.stdout }}".Trim()
+              $args = '/S /CONFIG="C:\ProgramData\alloy\config.alloy" /DISABLEREPORTING=no /DISABLEPROFILING=no'
+              Start-Process -FilePath $installer -ArgumentList $args -Wait -NoNewWindow
+
+      - name: StartAndConfigureService
+        action: ExecutePowerShell
+        inputs:
+          commands:
+            - |
+              Set-Service -Name "alloy" -StartupType Automatic
+              Start-Service -Name "alloy"
+              Write-Host "Grafana Alloy service started and set to Automatic."
+  - name: validate
+    steps:
+      - name: AssertWindowsService
+        action: ExecutePowerShell
+        inputs:
+          commands:
+            - |
+              $name = 'Alloy'
+              $exitWithFailure = 1
+              if (Get-Service -Name $name -ErrorAction 'SilentlyContinue') {
+                  Write-Host "The $name service has been installed successfully."
+              }
+              else {
+                  Write-Host "The $name service is not installed. Failing validation."
+                  [System.Environment]::Exit($exitWithFailure)
+              }

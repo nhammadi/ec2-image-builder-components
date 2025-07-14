@@ -1,0 +1,77 @@
+name: New Relic Infrastructure Agent
+description: Installs the latest version of the New Relic Infrastructure agent. This component installs only the agent. You must take additional steps to configure and use the agent. For more information, see the documentation at https://docs.newrelic.com/docs/logs/forward-logs/forward-your-logs-using-infrastructure-agent/.
+schemaVersion: 1.0
+constants:
+  - Source:
+      type: string
+      value: 'https://download.newrelic.com/infrastructure_agent/windows/newrelic-infra.msi'
+parameters:
+  - NewRelicLicenseKey:
+      type: string
+      description: The New Relic license key required to authenticate the infrastructure agent
+phases:
+  - name: build
+    steps:
+      - name: Installer
+        action: ExecutePowerShell
+        inputs:
+          commands:
+            - $fileName = '{{ Source }}'.Split('/')[-1]
+            - Write-Host (Join-Path -Path $env:TEMP -ChildPath $fileName) -NoNewLine
+      - name: DownloadInstaller
+        action: WebDownload
+        maxAttempts: 3
+        inputs:
+          - source: '{{ Source }}'
+            destination: '{{ build.Installer.outputs.stdout }}'
+            overwrite: true
+      - name: LogFile
+        action: ExecutePowerShell
+        inputs:
+          commands:
+            - $fileName = '{{ Source }}'.split('/')[-1]
+            - $fileNameWithExtension = $fileName.Replace('.msi','.log')
+            - Join-Path -Path $env:TEMP -ChildPath $fileNameWithExtension
+      - name: Install
+        action: InstallMSI
+        onFailure: Abort
+        maxAttempts: 3
+        timeoutSeconds: 600
+        inputs:
+          path: '{{ build.Installer.outputs.stdout }}'
+          logFile: '{{ build.LogFile.outputs.stdout }}'
+          reboot: Allow
+          properties:
+            GENERATE_CONFIG: '"true"'
+            LICENSE_KEY: '{{ NewRelicLicenseKey }}'
+      - name: Cleanup
+        action: DeleteFile
+        onFailure: Abort
+        loop:
+          forEach:
+            - '{{ build.Installer.outputs.stdout }}'
+            - '{{ build.LogFile.outputs.stdout }}'
+        inputs:
+          - path: '{{ loop.value }}'
+      - name: StartAgent
+        action: ExecutePowerShell
+        inputs:
+          commands:
+            - Start-Service newrelic-infra
+            - Set-Service newrelic-infra -StartupType Automatic
+  - name: validate
+    steps:
+      - name: AssertWindowsService
+        action: ExecutePowerShell
+        inputs:
+          commands:
+            - |
+              $name = 'newrelic-infra'
+              $exitWithFailure = 1
+              if (Get-Service -Name $name -ErrorAction 'SilentlyContinue') {
+                  Write-Host "The $name service has been installed successfully."
+              }
+              else {
+                  Write-Host "The $name service is not installed. Failing validation."
+                  [System.Environment]::Exit($exitWithFailure)
+              }

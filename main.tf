@@ -13,3 +13,11 @@ resource "aws_imagebuilder_component" "grafana_alloy_agent_windows" {
   data        = file("${path.module}/components/grafana-alloy-windows-component/component.yml")
   description = "Installs the Grafana Alloy agent on Windows"
 }
+
+resource "aws_imagebuilder_component" "elastic_agent_windows" {
+  name        = local.elastic_agent_windows_component_name
+  platform    = "Windows"
+  version     = "1.0.0"
+  data        = file("${path.module}/components/elastic-agent-windows-component/component.yml")
+  description = "Installs the Elastic agent on Windows"
+}

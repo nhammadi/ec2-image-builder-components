@@ -17,6 +17,7 @@ This repository provides reusable, production-ready **EC2 Image Builder componen
 - **Highlights:**
   - Installs latest `.msi` version from New Relic CDN
   - Accepts license key as a parameter
+  - Automatically cleans up installer and log files
 
 ---
 
@@ -29,6 +30,21 @@ This repository provides reusable, production-ready **EC2 Image Builder componen
 - **Highlights:**
   - Dynamically pulls latest GitHub release
   - Supports silent installation
+  - Automatically cleans up installer and log files
+
+---
+
+### 3. **Elastic Agent (Windows)**
+
+- **Path:** [`components/elastic-agent-windows-component`](./components/elastic-agent-windows-component)
+- **Description:**
+  Installs the Elastic Agent on Windows, enabling integration with Elastic Fleet for centralized observability. The component supports dynamic configuration using input parameters for the MSI download URL, Fleet Server URL, and enrollment token. For more information, see the documentation at [Elastic Fleet: Install Elastic Agent](https://www.elastic.co/docs/reference/fleet/install-fleet-managed-elastic-agent/).
+
+- **Highlights:**
+  - MSI URL provided as a configurable input parameter (`Source`)
+  - Enrolls agent with Fleet via `INSTALLARGS` at install time
+  - Validates service installation and running state
+  - Automatically cleans up installer and log files
 
 ---
 

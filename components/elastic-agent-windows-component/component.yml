@@ -1,0 +1,94 @@
+name: Install Elastic Agent
+description: Installs the Elastic Agent for use with Elastic Fleet or standalone mode. For more information, see the documentation at https://www.elastic.co/docs/reference/fleet/install-fleet-managed-elastic-agent/.
+schemaVersion: 1.0
+parameters:
+  - Source:
+      type: string
+      description: URL of the latest version of the Elastic Agent MSI
+      default: 'https://artifacts.elastic.co/downloads/beats/elastic-agent/elastic-agent-9.0.3+build202507110136-windows-x86_64.msi'
+  - EnrollmentToken:
+      type: string
+      description: Enrollment token for Elastic Agent (Fleet mode)
+  - FleetServerUrl:
+      type: string
+      description: The Fleet Server URL to enroll the Elastic Agent against
+
+phases:
+  - name: build
+    steps:
+      - name: Installer
+        action: ExecutePowerShell
+        inputs:
+          commands:
+            - $fileName = '{{ Source }}'.Split('/')[-1]
+            - Write-Host (Join-Path -Path $env:TEMP -ChildPath $fileName) -NoNewLine
+
+      - name: DownloadInstaller
+        action: WebDownload
+        maxAttempts: 3
+        inputs:
+          - source: '{{ Source }}'
+            destination: '{{ build.Installer.outputs.stdout }}'
+            overwrite: true
+
+      - name: LogFile
+        action: ExecutePowerShell
+        inputs:
+          commands:
+            - $fileName = '{{ Source }}'.split('/')[-1]
+            - $fileNameWithExtension = $fileName.Replace('.msi','.log')
+            - Join-Path -Path $env:TEMP -ChildPath $fileNameWithExtension
+      - name: Install
+        action: ExecutePowerShell
+        onFailure: Abort
+        maxAttempts: 3
+        timeoutSeconds: 600
+        inputs:
+          commands:
+            - |
+              Write-Host 'Starting installation of {{ build.Installer.outputs.stdout }}...'
+              $startProcess = @{
+                  FilePath = [System.IO.Path]::Combine($env:SystemRoot, 'System32', 'msiexec.exe')
+                  ArgumentList = @(
+                      '/i'
+                      '{{ build.Installer.outputs.stdout }}'
+                      '/l*v'
+                      '{{ build.LogFile.outputs.stdout}}'
+                      '/norestart'
+                      '/qn'
+                      'INSTALLARGS="--url={{ FleetServerUrl }} --enrollment-token={{ EnrollmentToken }}"'
+                  )
+                  Wait = $true
+                  PassThru = $true
+              }
+
+              $timer = [System.Diagnostics.Stopwatch]::StartNew()
+              $cmd = Start-Process @startProcess
+              $timer.Stop()
+              Write-Host ('Installation completed in {0} seconds.' -f $timer.Elapsed.TotalSeconds)
+              [Environment]::Exit($cmd.ExitCode)
+      - name: Cleanup
+        action: DeleteFile
+        onFailure: Abort
+        loop:
+          forEach:
+            - '{{ build.Installer.outputs.stdout }}'
+            - '{{ build.LogFile.outputs.stdout }}'
+        inputs:
+          - path: '{{ loop.value }}'
+  - name: validate
+    steps:
+      - name: AssertElasticAgentRunning
+        action: ExecutePowerShell
+        inputs:
+          commands:
+            - |
+              $name = 'Elastic Agent'
+              $exitWithFailure = 1
+              if (Get-Service -Name $name -ErrorAction 'SilentlyContinue') {
+                  Write-Host "The $name service has been installed successfully."
+              }
+              else {
+                  Write-Host "The $name service is not installed. Failing validation."
+                  [System.Environment]::Exit($exitWithFailure)
+              }

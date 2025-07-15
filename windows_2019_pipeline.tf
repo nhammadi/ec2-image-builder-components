@@ -22,6 +22,17 @@ resource "aws_imagebuilder_image_recipe" "recipe" {
       volume_type           = "gp3"
     }
   }
+  component {
+    component_arn = aws_imagebuilder_component.elastic_agent_windows.arn
+    parameter {
+      name  = "EnrollmentToken"
+      value = data.aws_ssm_parameter.elastic_enrollment_token.value
+    }
+    parameter {
+      name  = "FleetServerUrl"
+      value = data.aws_ssm_parameter.elastic_fleet_server_url.value
+    }
+  }
 
   component {
     component_arn = aws_imagebuilder_component.newrelic_infra_agent_windows.arn
